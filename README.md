@@ -12,9 +12,14 @@
 
 Dockerfile to build an [Activiti BPM](#http://www.activiti.org/) container image.
 
-## Version
+This is a fork of [Frank Wang's work](https://github.com/eternnoir/activiti) that I'm hacking on for my own setup.
 
-Current Version: **current**
+Probably best to use his image/repo for now as I'm liable to break something ;)
+
+## Versions
+* Java: 8.45
+* Tomcat: 8.0.24
+* Activiti: 5.18.0
 
 # Installation
 
