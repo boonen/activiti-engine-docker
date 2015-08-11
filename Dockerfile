@@ -33,7 +33,7 @@ RUN \
 # PostgreSQL
 ENV POSTGRESQL_DRIVER_VERSION 9.4-1201.jdbc41
 RUN \
-  wget https://jdbc.postgresql.org/download/${POSTGRESQL_DRIVER_VERSION}.jar -O /tmp/postgres-driver.jar && \
+  wget https://jdbc.postgresql.org/download/postgresql-${POSTGRESQL_DRIVER_VERSION}.jar -O /tmp/postgres-driver.jar && \
   cp /tmp/postgres-driver.jar /opt/tomcat/webapps/activiti-rest/WEB-INF/lib/ && \
   cp /tmp/postgres-driver.jar /opt/tomcat/webapps/activiti-explorer/WEB-INF/lib/
 
