@@ -30,6 +30,13 @@ RUN \
   cp /tmp/mysql-connector-java-${MYSQL_CONNECTOR_JAVA_VERSION}/mysql-connector-java-${MYSQL_CONNECTOR_JAVA_VERSION}-bin.jar /opt/tomcat/webapps/activiti-rest/WEB-INF/lib/ && \
   cp /tmp/mysql-connector-java-${MYSQL_CONNECTOR_JAVA_VERSION}/mysql-connector-java-${MYSQL_CONNECTOR_JAVA_VERSION}-bin.jar /opt/tomcat/webapps/activiti-explorer/WEB-INF/lib/
 
+# PostgreSQL
+ENV POSTGRESQL_DRIVER_VERSION 9.4-1201.jdbc41
+RUN \
+  wget https://jdbc.postgresql.org/download/${POSTGRESQL_DRIVER_VERSION}.jar -O /tmp/postgres-driver.jar && \
+  cp /tmp/postgres-driver.jar /opt/tomcat/webapps/activiti-rest/WEB-INF/lib/ && \
+  cp /tmp/postgres-driver.jar /opt/tomcat/webapps/activiti-explorer/WEB-INF/lib/
+
 # Configure
 ADD assets /assets
 RUN cp /assets/config/tomcat/tomcat-users.xml /opt/apache-tomcat-${TOMCAT_VERSION}/conf/
