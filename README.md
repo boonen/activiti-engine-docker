@@ -17,7 +17,7 @@ This is a fork of [Frank Wang's work](https://github.com/eternnoir/activiti) tha
 Probably best to use his image/repo for now as I'm liable to break something ;)
 
 ## Versions
-* Java: 8.45
+* Java: 7u79-jdk
 * Tomcat: 8.0.24
 * Activiti: 5.18.0
 

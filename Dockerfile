@@ -1,7 +1,7 @@
 #
 # Activiti Dockerfile
 #
-FROM java:8u45-jdk
+FROM java:7u79-jdk
 MAINTAINER Colin Woodcock "colin.woodcock@gmail.com"
 
 EXPOSE 8080
