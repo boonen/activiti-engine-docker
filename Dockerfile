@@ -39,6 +39,8 @@ RUN \
 
 # Configure
 ADD assets /assets
-RUN cp /assets/config/tomcat/tomcat-users.xml /opt/apache-tomcat-${TOMCAT_VERSION}/conf/
+RUN \
+  cp /assets/config/tomcat/tomcat-users.xml /opt/apache-tomcat-${TOMCAT_VERSION}/conf && \
+  cp -f /assets/config/explorer/engine.properties /opt/apache-tomcat-${TOMCAT_VERSION}/webapps/activiti-explorer/WEB-INF/classes
 
 CMD ["/assets/init"]
