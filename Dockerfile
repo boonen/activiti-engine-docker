@@ -23,7 +23,7 @@ RUN \
   unzip /opt/activiti/activiti-${ACTIVITI_VERSION}/wars/activiti-rest.war -d /opt/tomcat/webapps/activiti-rest
 
 # MySQL
-ENV MYSQL_CONNECTOR_JAVA_VERSION 5.1.33
+ENV MYSQL_CONNECTOR_JAVA_VERSION 5.1.36
 RUN \
   wget http://dev.mysql.com/get/Downloads/Connector-J/mysql-connector-java-${MYSQL_CONNECTOR_JAVA_VERSION}.zip -O /tmp/mysql-connector-java.zip && \
   unzip /tmp/mysql-connector-java.zip -d /tmp && \

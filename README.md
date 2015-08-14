@@ -9,7 +9,7 @@ Based on [Frank Wang's work](https://github.com/eternnoir/activiti) this has bee
 * Tomcat: 8.0.24
 * Activiti: 5.18.0
 * PostgreSQL driver: 9.4-1201.jdbc41 (needs >= 9.4 server)
-* Mysql connector: 5.1.33
+* Mysql connector: 5.1.36
 
 # Using
 This image can be deployed with different types of database:
