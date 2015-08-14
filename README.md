@@ -1,155 +1,205 @@
-# Table of Contents
-- [Introduction](#introduction)
-    - [Version](#version)
-    - [Changelog](Changelog.md)
-- [Installation](#installation)
-- [Quickstart](#quickstart)
-- [Configuration](#configuration)
-  - [Database](#database)
-  - [Available Configuration Parameters](#available-configuration-parameters)
-
 # Introduction
 
-Dockerfile to build an [Activiti BPM](#http://www.activiti.org/) container image.
+Dockerfile to build an [Activiti](#http://www.activiti.org/) BPM container image.
 
-This is a fork of [Frank Wang's work](https://github.com/eternnoir/activiti) that I'm hacking on for my own setup.
-
-Probably best to use his image/repo for now as I'm liable to break something ;)
+Based on [Frank Wang's work](https://github.com/eternnoir/activiti) this has been extended with support for PostgreSQL.
 
 ## Versions
 * Java: 7u79-jdk
 * Tomcat: 8.0.24
 * Activiti: 5.18.0
+* PostgreSQL driver: 9.4-1201.jdbc41 (needs >= 9.4 server)
+* Mysql connector: 5.1.33
 
-# Installation
+# Using
+This image can be deployed with different types of database:
 
-Pull the latest version of the image from the docker index. This is the recommended method of installation as it is easier to update image in the future. These builds are performed by the **Docker Trusted Build** service.
+* [PostgreSQL](#using_postgres)
+  * [Linked Container](#using_postgres_linked)
+  * [Remote Server](#using_postgres_remote)
+* [MySQL](#using_mysql)
+  * [Linked Container](#using_mysql_linked)
+  * [Remote Server](#using_mysql_remote)
 
-```bash
-docker pull eternnoir/activiti:latest
+Which one is dependent on the DB_TYPE variable which **must** be supplied when running the image.
+
+**For production use it is recommended to use a remote database server.**
+
+When linking containers, environment variables are shared into the target.  This means the database server's administrative account credentials are exposed.  If your DB instance has multiple schemas this could present a security risk.  Better to have a dedicated account that just gives the permissions needed.
+
+## Accessing
+Once deployed you can access the UI via:
+
+```
+http://<ip of docker host>:<container's 8080 port>/activiti-explorer
 ```
 
-Since version `latest`, the image builds are being tagged. You can now pull a particular version of activiti by specifying the version number. For example,
+And the REST resources via:
 
-```bash
-docker pull eternnoir/activiti:5.16.4
+```
+http://<ip of docker host>:<container's 8080 port>/activiti-rest
 ```
 
-Alternately you can build the image yourself.
+Login with *kermit/kermit*.
 
-```bash
-git clone https://github.com/eternnoir/activiti.git
-cd activiti
-docker build --tag="$USER/activiti" .
+### Ports
+Some of the commands below use docker's `-P` flag which maps the exposed ports to random ports on the Docker host.  This may/may not be what you want.  You can use `-p 8080:nnnn` instead if you want it assigned to a specific port.
+
+You can use `docker ps` to see what the mapping is.
+
+<a id="using_postgres"></a>
+## PostgresSQL
+
+<a id="using_postgres_linked"></a>
+### Linked Container
+There is a simple PostgreSQL 9.4 image with an *activiti* database that you can use:
+
+```
+docker run --name bpmdb -e POSTGRES_PASSWORD=changeme -d cwoodcock/postgres-activiti
 ```
 
-# Quickstart
+Change the password to be something more appropriate.
 
-Run the activiti image
+Now you can launch the Activiti server with:
 
-```bash
-docker run --name='activiti' -it --rm \
--p 8080:8080 \
--v /var/run/docker.sock:/run/docker.sock \
--v $(which docker):/bin/docker \
-eternnoir/activiti:latest
+```
+docker run --name activiti --link bpmdb:bpmdb -e DB_TYPE=postgres -P -d cwoodcock/activiti
 ```
 
-Point your browser to `http://localhost:8080` and login using the default username and password:
+**It is important that the alias on the link (the second part) is set to bpmdb.**
 
-* username: **kermit**
-* password: **kermit**
+You can name you database container anything you like though e.g. If you have named your database container *mmmpie* the command would look like:
 
-You should now have the Activiti application up and ready for testing. If you want to use this image in production the please read on.
+```
+docker run -P -d --name activiti --link mmmpie:bpmdb -e DB_TYPE=postgres cwoodcock/activiti
+```
 
+<a id="using_postgres_remote"></a>
+### Remote Server
+You do not need to do this first step if you already have a server.  This is purely for demo/doco purposes.  First we'll launch a vanilla PostgreSQL 9.4 instance and then get a psql shell to it:
 
-# Configuration
+```
+docker run --name postgres -e POSTGRES_PASSWORD=changeme -p 5432:5432 -d postgres:9.4
+docker run -it --link postgres:postgres --rm postgres:9.4 sh -c 'exec psql -h "$POSTGRES_PORT_5432_TCP_ADDR" -p "$POSTGRES_PORT_5432_TCP_PORT" -U postgres'
+```
+Then log in with the POSTGRES_PASSWORD, in this case *changeme*.
 
-## Database
+Notice that the postgres container maps its exposed port onto the Docker host, making it accessible externally.
 
-Activiti uses a database backend to store its data. You can configure this image to use MySQL.
+From now on it's exactly the same as if you had a pizza box.
 
-### MySQL
+At the `postgres=#` prompt
 
-#### External MySQL Server
+```
+CREATE DATABASE activiti;
+REVOKE CONNECT ON DATABASE activiti FROM PUBLIC;
+CREATE ROLE activiti WITH LOGIN PASSWORD 'changeme';
+GRANT ALL PRIVILEGES ON DATABASE activiti TO activiti;
+\q
+```
 
-The image can be configured to use an external MySQL database instead of starting a MySQL server internally. The database configuration should be specified using environment variables while starting the Activiti image.
+You can get fancier e.g. by precreating the DB and only granting usage rights to the app.  But you will need to talk to the beardy guy in the corner for that.
 
-Before you start the Activiti image create user and database for activiti.
+Now the DB is setup we can launch the Activiti image:
+
+```
+docker run -P -d --name activiti -e DB_TYPE=postgres -e DB_HOST=192.168.59.103 -e DB_USER=activiti -e DB_PASS=changeme cwoodcock/activiti
+```
+\* *assumes the PostgreSQL server is listening on 192.168.59.103:5432*
+
+<a id="using_mysql"></a>
+## MySQL
+
+<a id="using_mysql_linked"></a>
+### Linked Container
+
+```
+docker run --name bpmdb -e MYSQL_ROOT_PASSWORD=changeme -d mysql:latest
+docker run -it --link bpmdb:mysql --rm mysql sh -c 'exec mysql -h"$MYSQL_PORT_3306_TCP_ADDR" -P"$MYSQL_PORT_3306_TCP_PORT" -uroot -p'
+```
+
+*Wait a few seconds before running the second command just to give the server time to startup.*
+
+Enter the MYSQL\_ROOT\_PASSWORD, in this case *changeme*.
+
+At the `mysql>` prompt:
 
 ```sql
-CREATE USER 'activiti'@'%.%.%.%' IDENTIFIED BY 'password';
-CREATE DATABASE IF NOT EXISTS `activiti_production` DEFAULT CHARACTER SET `utf8` COLLATE `utf8_unicode_ci`;
-GRANT ALL PRIVILEGES ON `activiti_production`.* TO 'activiti'@'%.%.%.%';
+CREATE DATABASE IF NOT EXISTS `activiti` DEFAULT CHARACTER SET `utf8` COLLATE `utf8_unicode_ci`;
+exit
 ```
 
-We are now ready to start the Activiti application.
+Now you can run the Activiti container:
 
-*Assuming that the mysql server host is 192.0.2.1*
+```
+docker run -P -d --name activiti --link bpmdb:bpmdb -e DB_TYPE=mysql cwoodcock/activiti
+```
+
+**It is important that the alias on the link (the second part) is set to bpmdb.**
+
+You can name you database container anything you like though e.g. If you have named your database container *mmmpie* the command would look like:
+
+```
+docker run --name activiti --link mmmpie:bpmdb -e DB_TYPE=mysql -P -d cwoodcock/activiti
+```
+
+### Remote Server
+You do not need to do this first step if you already have a server.  This is purely for demo/doco purposes.  First we will launch an official MySQL container, then get a mysql shell to it:
+
+```
+docker run --name bpmdb -e MYSQL_ROOT_PASSWORD=changeme -p 3306:3306 -d mysql:latest
+docker run -it --link bpmdb:mysql --rm mysql sh -c 'exec mysql -h"$MYSQL_PORT_3306_TCP_ADDR" -P"$MYSQL_PORT_3306_TCP_PORT" -uroot -p'
+```
+
+*Wait a few seconds before running the second command just to give the server time to startup.*
+
+Note the use of the `-p` flag to map the MySQL container's 3306 port onto the Docker host.
+
+Enter the MYSQL\_ROOT\_PASSWORD, in this case *changeme*.
+
+At the `mysql>` prompt:
+
+```sql
+CREATE USER 'activiti'@'%.%.%.%' IDENTIFIED BY 'changeme';
+CREATE DATABASE IF NOT EXISTS `activiti` DEFAULT CHARACTER SET `utf8` COLLATE `utf8_unicode_ci`;
+GRANT ALL PRIVILEGES ON `activiti`.* TO 'activiti'@'%.%.%.%';
+exit
+```
+
+You could (should) replace the *%.%.%.%* wildcards to be more restrictive allowing only specific hosts to connect.
+
+Now you can run the Activiti container:
 
 ```bash
-docker run --name=activiti -d \
-  -e 'DB_HOST=192.0.2.1’ -e 'DB_NAME=activiti_production' -e 'DB_USER=activiti’ -e 'DB_PASS=password' \
-eternnoir/activiti:latest
+docker run -d -P \
+  --name=activiti \
+  -e DB_TYPE=mysql \
+  -e DB_HOST=192.168.59.103 \
+  -e DB_USER=activiti \
+  -e DB_PASS=changeme \
+  cwoodcock/activiti
 ```
+\* *assumes the MySQL server is listening on 192.168.59.103:3306*
 
-#### Linking to MySQL Container
-
-You can link this image with a mysql container for the database requirements. The alias of the mysql server container should be set to **mysql** while linking with the activiti image.
-
-If a mysql container is linked, only the `DB_TYPE`, `DB_HOST` and `DB_PORT` settings are automatically retrieved using the linkage. You may still need to set other database connection parameters such as the `DB_NAME`, `DB_USER`, `DB_PASS` and so on.
-
-To illustrate linking with a mysql container, we will use the [sameersbn/mysql](https://github.com/sameersbn/docker-mysql) image. When using docker-mysql in production you should mount a volume for the mysql data store. Please refer the [README](https://github.com/sameersbn/docker-mysql/blob/master/README.md) of docker-mysql for details.
-
-First, lets pull the mysql image from the docker index.
-
-```bash
-docker pull sameersbn/mysql:latest
-```
-
-For data persistence lets create a store for the mysql and start the container.
-
-SELinux users are also required to change the security context of the mount point so that it plays nicely with selinux.
-
-```bash
-mkdir -p /opt/mysql/data
-sudo chcon -Rt svirt_sandbox_file_t /opt/mysql/data
-```
-
-The run command looks like this.
-
-```bash
-docker run --name=mysql -d \
-  -e 'DB_NAME=activiti_production' -e 'DB_USER=activiti' -e 'DB_PASS=password' \
-	-v /opt/mysql/data:/var/lib/mysql \
-	sameersbn/mysql:latest
-```
-
-The above command will create a database named `activiti_production` and also create a user named `activiti` with the password `activiti` with full/remote access to the `activiti_production` database.
-
-We are now ready to start the Activiti application.
-
-```bash
-docker run --name=activiti -d --link mysql:mysql \
-  eternnoir/activiti:latest
-```
-
-The image will automatically fetch the `DB_NAME`, `DB_USER` and `DB_PASS` variables from the mysql container using the magic of docker links and works with the following images:
- - [sameersbn/mysql](https://registry.hub.docker.com/u/sameersbn/mysql/)
-
-### Available Configuration Parameters
+# Advanced Configuration
 
 *Please refer the docker run command options for the `--env-file` flag where you can specify all required environment variables in a single file. This will save you from writing a potentially long docker run command.*
 
-Below is the complete list of available options that can be used to customize your activiti installation.
+Below is the complete list of available options that can be used to customize your Activiti installation.
 
-- **TOMCAT_ADMIN_USER**: Tomcat admin user name. Defaults to `admin`.
-- **TOMCAT_ADMIN_PASSWORD**: Tomcat admin user password. Defaults to `admin`.
-- **DB_HOST**: The database server hostname. Defaults to ``.
-- **DB_PORT**: The database server port. Defaults to `3306`.
-- **DB_NAME**: The database database name. Defaults to ``.
-- **DB_USER**: The database database user. Defaults to ``.
-- **DB_PASS**: The database database password. Defaults to ``.
+## Required Parameters
+- **DB_TYPE**: mysql or postgres
+
+## Optional Parameters
+- **DB_HOST**: The database server hostname.
+- **DB_PORT**: The database server port.  Has sane defaults depending on DB_TYPE (3306 for mysql, 5432 for postgres).
+- **DB_NAME**: The database name. Defaults to `activiti`.
+- **DB_USER**: The database user. When linking, it uses the root user for the database otherwise `activiti`.
+- **DB_PASS**: The database password.  When linking this will be discovered from the environment, when remote it **must** be supplied.
+- **TOMCAT\_ADMIN\_USER**: Tomcat admin user name. Defaults to `admin`.
+- **TOMCAT\_ADMIN\_PASSWORD**: Tomcat admin user password. Defaults to `admin`.
+
+The initialisation script will attempt to discover DB_* parameters (other than DB\_TYPE) however if supplied they take precedence.
 
 # Maintenance
 
@@ -174,10 +224,6 @@ sudo docker-enter activiti
 For more information refer https://github.com/jpetazzo/nsenter
 
 Another tool named `nsinit` can also be used for the same purpose. Please refer https://jpetazzo.github.io/2014/03/23/lxc-attach-nsinit-nsenter-docker-0-9/ for more information.
-
-# Upgrading
-
-TODO
 
 # References
 

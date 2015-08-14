@@ -1,6 +1,79 @@
 #!/bin/bash
+# This setup script for Activiti is evaluated when the container is run.
+# It looks at the various environment variables and updates the database configuration as appropriate.
+#
+# DB_TYPE must be supplied as an environment variable if you want to use something other than the in-memory DB.
+# e.g. docker run -d --link activiti-psql:bpmdb -e "DB_TYPE=postgres" cwoodcock/activiti
+#
+# When linking the database, it must be set as "bpmdb" otherwise this script will break.
+#
+
+# Exit on non-zero response
 set -e
-set -x
+
+# Show commands
+# set -x
+
+# Define some colours for pretty printing
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m' # Reset
+
+# This helps for the image build simply by making sure everything that should be set actually has been
+function sanity_check() {
+  for var in DB_HOST DB_PORT DB_USER DB_PASS DB_NAME JDBC_URL; do
+    if [ -z ${!var} ]; then
+      printf "${RED}Failed sanity check of environment${NC} : $var was not set\n"
+      exit 1
+    fi
+  done
+}
+
+function configure_mysql() {
+  JDBC_DRIVER_CLASS="com.mysql.jdbc.Driver"
+
+  # See if we are linked
+  if [ -n $BPMDB_ENV_MYSQL_ROOT_PASSWORD ]; then
+    # Even when linking the policy DB_* params take precedence
+    # If nothing is supplied use root
+    DB_USER=${DB_USER:-"root"}
+  fi
+
+  DB_HOST=${DB_HOST:-${BPMDB_PORT_3306_TCP_ADDR}}
+  DB_PORT=${DB_PORT:-"3306"}
+
+  # If not supplied by user, or not linked and set above, default to activiti
+  DB_USER=${DB_USER:-"activiti"}
+  DB_PASS=${DB_PASS:-${BPMDB_ENV_MYSQL_ROOT_PASSWORD}}
+  DB_NAME=${DB_NAME:-"activiti"}
+  JDBC_URL="jdbc:mysql:\\/\\/${DB_HOST}:${DB_PORT}\\/${DB_NAME}?autoReconnect=true\\&characterEncoding=utf8"
+}
+
+function configure_postgres() {
+  JDBC_DRIVER_CLASS="org.postgresql.Driver"
+
+  # If we're not linking we might not have some environment variables, so set the defaults
+  BPMDB_PORT_5432_TCP_PORT=${BPMDB_PORT_5432_TCP_PORT:-5432}     # use 5432 as default port
+  BPMDB_ENV_POSTGRES_USER=${BPMDB_ENV_POSTGRES_USER:-postgres}  # postgres is the default user
+
+  DB_HOST=${DB_HOST:-${BPMDB_PORT_5432_TCP_ADDR}}
+  DB_PORT=${DB_PORT:-${BPMDB_PORT_5432_TCP_PORT}}
+  DB_USER=${DB_USER:-${BPMDB_ENV_POSTGRES_USER}}
+  DB_PASS=${DB_PASS:-${BPMDB_ENV_POSTGRES_PASSWORD}}
+  DB_NAME=${DB_NAME:-"activiti"}
+  JDBC_URL="jdbc:postgresql:\\/\\/${DB_HOST}:${DB_PORT}\\/${DB_NAME}"
+}
+
+# This performs variable substitution on the db.properties file then copies into both the REST and explorer apps
+function update_db_properties() {
+  sed 's/{{JDBC_DRIVER_CLASS}}/'"${JDBC_DRIVER_CLASS}"'/g' -i /assets/config/db.properties
+  sed 's/{{JDBC_URL}}/'"${JDBC_URL}"'/g' -i /assets/config/db.properties
+  sed 's/{{JDBC_USER}}/'"${DB_USER}"'/g' -i /assets/config/db.properties
+  sed 's/{{JDBC_PASSWORD}}/'"${DB_PASS}"'/g' -i /assets/config/db.properties
+  sed 's/{{DB_TYPE}}/'"${DB_TYPE}"'/g' -i /assets/config/db.properties
+  cp -f /assets/config/db.properties /opt/tomcat/webapps/activiti-rest/WEB-INF/classes
+  cp -f /assets/config/db.properties /opt/tomcat/webapps/activiti-explorer/WEB-INF/classes
+}
 
 # configure tomcat admin user/password
 TOMCAT_ADMIN_USER=${TOMCAT_ADMIN_USER:-admin}
@@ -8,79 +81,20 @@ TOMCAT_ADMIN_PASSWORD=${TOMCAT_ADMIN_PASSWORD:-admin}
 sed 's,{{TOMCAT_ADMIN_USER}},'"${TOMCAT_ADMIN_USER}"',g' -i /opt/tomcat/conf/tomcat-users.xml
 sed 's,{{TOMCAT_ADMIN_PASSWORD}},'"${TOMCAT_ADMIN_PASSWORD}"',g' -i /opt/tomcat/conf/tomcat-users.xml
 
-# mysql db
-DB_TYPE=${DB_TYPE:-}
-DB_HOST=${DB_HOST:-}
-DB_PORT=${DB_PORT:-}
-DB_NAME=${DB_NAME:-}
-DB_USER=${DB_USER:-}
-DB_PASS=${DB_PASS:-}
-
-# is a mysql database linked?
-# requires that the mysql container have exposed
-# port 3306 and respectively.
-if [ -n "${MYSQL_PORT_3306_TCP_ADDR}" ]; then
-  DB_TYPE=${DB_TYPE:-mysql}
-  DB_HOST=${DB_HOST:-${MYSQL_PORT_3306_TCP_ADDR}}
-  DB_PORT=${DB_PORT:-${MYSQL_PORT_3306_TCP_PORT}}
-
-  # support for linked sameersbn/mysql image
-  DB_USER=${DB_USER:-${MYSQL_ENV_DB_USER}}
-  DB_PASS=${DB_PASS:-${MYSQL_ENV_DB_PASS}}
-  DB_NAME=${DB_NAME:-${MYSQL_ENV_DB_NAME}}
-fi
-
-## For the sake of getting the quick start guide to work,
-## we attempt to spin up a mysql container if possible.
-##
-## NOTE: this is only meant for getting the quick start guide to work .
-##
-if [ -z "${DB_HOST}" -a -n "$(which docker)" -a -S /var/run/docker.sock ]; then
-  echo "Database connection details not specified."
-  echo "Will try to spin up a new mysql image with the name mysql-activiti."
-  echo "Please manually configure the database connection in production."
-  case "$(docker inspect --format {{.State.Running}} mysql-activiti 2>/dev/null)" in
-    true)
-      echo "Using existing mysql container..."
-      ;;
-    false)
-      echo "Starting up existing mysql container..."
-      docker start mysql-activiti >/dev/null 2>/dev/null
-      ;;
-    *)
-      echo "Starting up a new myslq-activiti container..."
-      docker run --name='mysql-activiti' -d \
-        -e 'DB_USER=activiti_user' -e 'DB_PASS=activiti_pass' -e 'DB_NAME=activiti_db' \
-        sameersbn/mysql:latest >/dev/null 2>/dev/null
-      ;;
-  esac
-  DB_TYPE=mysql
-  DB_HOST=$(docker inspect --format {{.NetworkSettings.IPAddress}} mysql-activiti 2>/dev/null)
-  DB_PORT=3306
-  DB_USER=activiti_user
-  DB_PASS=activiti_pass
-  DB_NAME=activiti_db
-fi
-
-if [ -z "${DB_HOST}" ]; then
-  echo "WARNING: "
-  echo "  No mysql connection available."
-  echo "  Will work with default H2 in-memory database."
-  unset DB_TYPE
-fi
-
-# use default port number if it is still not set
-case "${DB_TYPE}" in
-  mysql) 
-    DB_PORT=${DB_PORT:-3306}
-    sed 's/{{DB_PORT}}/'"${DB_PORT}"'/g' -i /assets/config/db.properties
-    sed 's/{{DB_HOST}}/'"${DB_HOST}"'/g' -i /assets/config/db.properties
-    sed 's/{{DB_NAME}}/'"${DB_NAME}"'/g' -i /assets/config/db.properties
-    sed 's/{{DB_USER}}/'"${DB_USER}"'/g' -i /assets/config/db.properties
-    sed 's/{{DB_PASS}}/'"${DB_PASS}"'/g' -i /assets/config/db.properties
-    cp -f /assets/config/db.properties /opt/tomcat/webapps/activiti-rest/WEB-INF/classes
-    cp -f /assets/config/db.properties /opt/tomcat/webapps/activiti-explorer/WEB-INF/classes
+case ${DB_TYPE} in
+  mysql)
+    configure_mysql
+    ;;
+  postgres)
+    configure_postgres
+    ;;
+  *)
+    printf "${RED}Please specify the DB_TYPE when running this image${NC}\n"
+    exit 1
     ;;
 esac
+
+sanity_check
+update_db_properties
 
 /opt/tomcat/bin/catalina.sh run
