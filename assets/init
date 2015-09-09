@@ -47,6 +47,7 @@ function configure_mysql() {
   DB_PASS=${DB_PASS:-${BPMDB_ENV_MYSQL_ROOT_PASSWORD}}
   DB_NAME=${DB_NAME:-"activiti"}
   JDBC_URL="jdbc:mysql:\\/\\/${DB_HOST}:${DB_PORT}\\/${DB_NAME}?autoReconnect=true\\&characterEncoding=utf8"
+  HIBERNATE_DIALECT=MySQLDialect
 }
 
 function configure_postgres() {
@@ -61,7 +62,8 @@ function configure_postgres() {
   DB_USER=${DB_USER:-${BPMDB_ENV_POSTGRES_USER}}
   DB_PASS=${DB_PASS:-${BPMDB_ENV_POSTGRES_PASSWORD}}
   DB_NAME=${DB_NAME:-"activiti"}
-  JDBC_URL="jdbc:postgresql:\\/\\/${DB_HOST}:${DB_PORT}\\/${DB_NAME}"
+  JDBC_URL="jdbc:postgresql:\\/\\/${DB_HOST}:${DB_PORT}\\/${DB_NAME}?characterEncoding=utf8"
+  HIBERNATE_DIALECT=PostgreSQLDialect
 }
 
 # This performs variable substitution on the db.properties file then copies into both the REST and explorer apps
@@ -70,16 +72,21 @@ function update_db_properties() {
   sed 's/{{JDBC_URL}}/'"${JDBC_URL}"'/g' -i /assets/config/db.properties
   sed 's/{{JDBC_USER}}/'"${DB_USER}"'/g' -i /assets/config/db.properties
   sed 's/{{JDBC_PASSWORD}}/'"${DB_PASS}"'/g' -i /assets/config/db.properties
-  sed 's/{{DB_TYPE}}/'"${DB_TYPE}"'/g' -i /assets/config/db.properties
-  cp -f /assets/config/db.properties /opt/tomcat/webapps/activiti-rest/WEB-INF/classes
-  cp -f /assets/config/db.properties /opt/tomcat/webapps/activiti-explorer/WEB-INF/classes
+  cp -f /assets/config/db.properties /apache-tomcat/webapps/activiti-rest/WEB-INF/classes
+
+  sed 's/{{JDBC_DRIVER_CLASS}}/'"${JDBC_DRIVER_CLASS}"'/g' -i /assets/config/activiti-app.properties
+  sed 's/{{JDBC_URL}}/'"${JDBC_URL}"'/g' -i /assets/config/activiti-app.properties
+  sed 's/{{JDBC_USER}}/'"${DB_USER}"'/g' -i /assets/config/activiti-app.properties
+  sed 's/{{JDBC_PASSWORD}}/'"${DB_PASS}"'/g' -i /assets/config/activiti-app.properties
+  sed 's/{{HIBERNATE_DIALECT}}/'"${HIBERNATE_DIALECT}"'/g' -i /assets/config/activiti-app.properties
+  cp -f /assets/config/activiti-app.properties /apache-tomcat/webapps/activiti-app/WEB-INF/classes/META-INF/activiti-app
 }
 
 # configure tomcat admin user/password
 TOMCAT_ADMIN_USER=${TOMCAT_ADMIN_USER:-admin}
 TOMCAT_ADMIN_PASSWORD=${TOMCAT_ADMIN_PASSWORD:-admin}
-sed 's,{{TOMCAT_ADMIN_USER}},'"${TOMCAT_ADMIN_USER}"',g' -i /opt/tomcat/conf/tomcat-users.xml
-sed 's,{{TOMCAT_ADMIN_PASSWORD}},'"${TOMCAT_ADMIN_PASSWORD}"',g' -i /opt/tomcat/conf/tomcat-users.xml
+sed 's,{{TOMCAT_ADMIN_USER}},'"${TOMCAT_ADMIN_USER}"',g' -i /apache-tomcat/conf/tomcat-users.xml
+sed 's,{{TOMCAT_ADMIN_PASSWORD}},'"${TOMCAT_ADMIN_PASSWORD}"',g' -i /apache-tomcat/conf/tomcat-users.xml
 
 case ${DB_TYPE} in
   mysql)
