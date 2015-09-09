@@ -2,24 +2,24 @@
 
 Dockerfile to build an [Activiti](#http://www.activiti.org/) BPM container image.
 
-Based on [Frank Wang's work](https://github.com/eternnoir/activiti) this has been extended with support for PostgreSQL.
+Based on [Frank Wang's work](https://github.com/eternnoir/activiti) and [Colin Woodcock's work](https://github.com/cwoodcock-docker/activiti) this has been extended with support for Activiti 6.
 
 ## Versions
-* Java: 7u79-jdk
-* Tomcat: 8.0.24
-* Activiti: 5.18.0
+* Java: 8u60-jdk
+* Tomcat: 8.0.26
+* Activiti: 6.0.0.Beta1
 * PostgreSQL driver: 9.4-1201.jdbc41 (needs >= 9.4 server)
 * Mysql connector: 5.1.36
 
 # Using
 This image can be deployed with different types of database:
 
-* [PostgreSQL](#using_postgres)
-  * [Linked Container](#using_postgres_linked)
-  * [Remote Server](#using_postgres_remote)
-* [MySQL](#using_mysql)
-  * [Linked Container](#using_mysql_linked)
-  * [Remote Server](#using_mysql_remote)
+* PostgreSQL
+  * Linked Container
+  * Remote Server
+* MySQL
+  * Linked Container
+  * Remote Server
 
 Which one is dependent on the DB_TYPE variable which **must** be supplied when running the image.
 
@@ -31,7 +31,7 @@ When linking containers, environment variables are shared into the target.  This
 Once deployed you can access the UI via:
 
 ```
-http://<ip of docker host>:<container's 8080 port>/activiti-explorer
+http://<ip of docker host>:<container's 8080 port>/activiti-app
 ```
 
 And the REST resources via:
@@ -63,7 +63,7 @@ Change the password to be something more appropriate.
 Now you can launch the Activiti server with:
 
 ```
-docker run --name activiti --link bpmdb:bpmdb -e DB_TYPE=postgres -P -d cwoodcock/activiti
+docker run -p 8080:8080 --name activiti --link bpmdb:bpmdb -e DB_TYPE=postgres -e DB_PASS=changeme -d boonen/activiti-engine-docker
 ```
 
 **It is important that the alias on the link (the second part) is set to bpmdb.**
@@ -71,7 +71,7 @@ docker run --name activiti --link bpmdb:bpmdb -e DB_TYPE=postgres -P -d cwoodcoc
 You can name you database container anything you like though e.g. If you have named your database container *mmmpie* the command would look like:
 
 ```
-docker run -P -d --name activiti --link mmmpie:bpmdb -e DB_TYPE=postgres cwoodcock/activiti
+docker run -P -d --name activiti --link mmmpie:bpmdb -e DB_TYPE=postgres boonen/activiti-engine-docker
 ```
 
 <a id="using_postgres_remote"></a>
@@ -103,7 +103,7 @@ You can get fancier e.g. by precreating the DB and only granting usage rights to
 Now the DB is setup we can launch the Activiti image:
 
 ```
-docker run -P -d --name activiti -e DB_TYPE=postgres -e DB_HOST=192.168.59.103 -e DB_USER=activiti -e DB_PASS=changeme cwoodcock/activiti
+docker run -P -d --name activiti -e DB_TYPE=postgres -e DB_HOST=192.168.59.103 -e DB_USER=activiti -e DB_PASS=changeme boonen/activiti-engine-docker
 ```
 \* *assumes the PostgreSQL server is listening on 192.168.59.103:5432*
 
@@ -140,7 +140,7 @@ docker run -P -d --name activiti --link bpmdb:bpmdb -e DB_TYPE=mysql cwoodcock/a
 You can name you database container anything you like though e.g. If you have named your database container *mmmpie* the command would look like:
 
 ```
-docker run --name activiti --link mmmpie:bpmdb -e DB_TYPE=mysql -P -d cwoodcock/activiti
+docker run --name activiti --link mmmpie:bpmdb -e DB_TYPE=mysql -P -d boonen/activiti-engine-docker
 ```
 
 ### Remote Server
@@ -200,30 +200,6 @@ Below is the complete list of available options that can be used to customize yo
 - **TOMCAT\_ADMIN\_PASSWORD**: Tomcat admin user password. Defaults to `admin`.
 
 The initialisation script will attempt to discover DB_* parameters (other than DB\_TYPE) however if supplied they take precedence.
-
-# Maintenance
-
-## Shell Access
-
-For debugging and maintenance purposes you may want access the container shell. Since the container does not allow interactive login over the SSH protocol, you can use the [nsenter](http://man7.org/linux/man-pages/man1/nsenter.1.html) linux tool (part of the util-linux package) to access the container shell.
-
-Some linux distros (e.g. ubuntu) use older versions of the util-linux which do not include the `nsenter` tool. To get around this @jpetazzo has created a nice docker image that allows you to install the `nsenter` utility and a helper script named `docker-enter` on these distros.
-
-To install the nsenter tool on your host execute the following command.
-
-```bash
-docker run --rm -v /usr/local/bin:/target jpetazzo/nsenter
-```
-
-Now you can access the container shell using the command
-
-```bash
-sudo docker-enter activiti
-```
-
-For more information refer https://github.com/jpetazzo/nsenter
-
-Another tool named `nsinit` can also be used for the same purpose. Please refer https://jpetazzo.github.io/2014/03/23/lxc-attach-nsinit-nsenter-docker-0-9/ for more information.
 
 # References
 
