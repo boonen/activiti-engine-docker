@@ -97,4 +97,4 @@ esac
 sanity_check
 update_db_properties
 
-/opt/tomcat/bin/catalina.sh run
+/apache-tomcat/bin/catalina.sh run
